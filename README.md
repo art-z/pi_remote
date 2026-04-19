@@ -2,8 +2,6 @@
 
 Raspberry Pi 4 Model B Rev 1.4
 
-Linux ai 5.15.0-1079-raspi #82-Ubuntu SMP PREEMPT Tue May 27 04:20:55 UTC 2025 aarch64 aarch64 aarch64 aarch64 GNU/Linux
-
 PRETTY_NAME="Ubuntu 22.04.5 LTS"
 NAME="Ubuntu"
 VERSION_ID="22.04"
@@ -61,9 +59,9 @@ uname -a
 
 ---
 
-## Часть 1. Docker: стек, поднятие, работа, железо
+## Docker: стек, поднятие, работа, железо
 
-Здесь — непосредственно **проект pi_remote в контейнерах**: что за сервисы, как поднять, как пользоваться, что нужно от платы.
+**проект pi_remote в контейнерах**: что за сервисы, как поднять, как пользоваться, что нужно от платы.
 
 ### Стек
 
