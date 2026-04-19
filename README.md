@@ -73,13 +73,13 @@ uname -a
 
 - **Docker** и **Docker Compose v2**.
 - Сборка образов **на самой Pi** (aarch64) или `docker buildx build --platform linux/arm64`.
-- Для `**display`**: доступ к `**/dev/spidev0.0`**, `**/dev/gpiomem**` (см. `prev/docker-compose.yml`). Распиновка ST7789, подсветка и замечания по GPIO: `**services/display/README.md**`.
+- Для `**display`**: доступ к `**/dev/spidev0.0`**, `**/dev/gpiomem**` Распиновка ST7789, подсветка и замечания по GPIO: `**services/display/README.md**`.
 - Для `**fan**`: GPIO (контейнер с `privileged` и `/dev/gpiomem`), пин — в `.env` (`FAN_GPIO`).
 - Для `**audio**`: `/dev/snd`, в `.env` задайте `AUDIO_ALSA_DEVICE` (на хосте: `arecord -l`). Подробно про `plughw:1,0` и проверку микрофона — `**services/audio/README.md**`. Без микрофона закомментируйте сервис `**audio**` в `**docker-compose.yml**`.
 
 ### Поднятие стека
 
-1. Конфиг: `cp .env.example .env`, при необходимости заполните `REMOTE_SYNC_URL`, токены, пороги вентилятора и параметры дисплея (как в `prev/display.py`: 240×240, SPI 80 МГц, поворот 180° → в luma `**DISPLAY_ROTATE=2**`).
+1. Конфиг: `cp .env.example .env`, при необходимости заполните `REMOTE_SYNC_URL`, токены, пороги вентилятора и параметры дисплея.
 2. Весь стек сразу (веб, API, Redis, sync-worker, **дисплей**, **вентилятор**):
   ```bash
    docker compose up -d --build
