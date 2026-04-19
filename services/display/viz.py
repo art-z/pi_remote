@@ -178,3 +178,11 @@ def idle_tick(device, font_path: str, font_size: Optional[int] = None, tz_name: 
         font_size=font_size,
         tz_name=tz_name,
     )
+
+
+def clear_screen(device) -> None:
+    """Полностью чёрный кадр (перед остановкой процесса / контейнера)."""
+    if not device:
+        return
+    image = Image.new("RGB", (WIDTH, HEIGHT), "black")
+    device.display(image)

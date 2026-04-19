@@ -8,7 +8,9 @@ from __future__ import annotations
 import json
 import logging
 import os
+import signal
 import time
+from collections.abc import Callable
 from typing import Optional
 
 import redis
@@ -16,7 +18,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from viz import PulseVisualizer, draw_status, idle_tick
+from viz import PulseVisualizer, clear_screen, draw_status, idle_tick
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("display")
@@ -78,6 +80,16 @@ def _redis_timezone(r: redis.Redis) -> str:
     return str(raw).strip()
 
 
+def _sleep_interruptible(total: float, should_continue: Callable[[], bool]) -> bool:
+    """Спит total с; возвращает False, если should_continue() стало ложью (SIGTERM и т.п.)."""
+    end = time.monotonic() + total
+    while time.monotonic() < end:
+        if not should_continue():
+            return False
+        time.sleep(min(0.05, end - time.monotonic()))
+    return True
+
+
 def _int_from_state(state: dict, key: str, default: int) -> int:
     v = state.get(key)
     if v is None:
@@ -91,78 +103,100 @@ def _int_from_state(state: dict, key: str, default: int) -> int:
 def main():
     device = None
     current_rotate = DISPLAY_ROTATE
+    stop_requested = False
+
+    def _on_stop(signum, _frame):
+        nonlocal stop_requested
+        stop_requested = True
+        log.info("Сигнал %s — остановка после очистки экрана", signum)
+
+    signal.signal(signal.SIGTERM, _on_stop)
+    signal.signal(signal.SIGINT, _on_stop)
+
     try:
-        device = _load_device()
-        log.info(
-            "ST7789 %sx%s rotate=%s SPI %s.%s DC=%s RST=%s speed=%s light=%s",
-            DISPLAY_WIDTH,
-            DISPLAY_HEIGHT,
-            current_rotate,
-            SPI_PORT,
-            SPI_DEVICE,
-            GPIO_DC,
-            GPIO_RST,
-            SPI_SPEED_HZ or "default",
-            GPIO_LIGHT or "18 (luma default)",
-        )
-    except Exception as e:
-        log.error("Дисплей недоступен: %s", e)
-        raise
+        try:
+            device = _load_device()
+            log.info(
+                "ST7789 %sx%s rotate=%s SPI %s.%s DC=%s RST=%s speed=%s light=%s",
+                DISPLAY_WIDTH,
+                DISPLAY_HEIGHT,
+                current_rotate,
+                SPI_PORT,
+                SPI_DEVICE,
+                GPIO_DC,
+                GPIO_RST,
+                SPI_SPEED_HZ or "default",
+                GPIO_LIGHT or "18 (luma default)",
+            )
+        except Exception as e:
+            log.error("Дисплей недоступен: %s", e)
+            raise
 
-    r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
-    pubsub = r.pubsub(ignore_subscribe_messages=True)
-    pubsub.subscribe(DISPLAY_NOTIFY_CHANNEL)
+        r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+        pubsub = r.pubsub(ignore_subscribe_messages=True)
+        pubsub.subscribe(DISPLAY_NOTIFY_CHANNEL)
 
-    viz = PulseVisualizer(device, FONT_PATH, DEFAULT_FONT_SIZE)
-    pulse_frame = float(os.getenv("DISPLAY_PULSE_FRAME_SEC", "0.08"))
-    status_pause = float(os.getenv("DISPLAY_STATUS_POLL_SEC", "0.35"))
+        viz = PulseVisualizer(device, FONT_PATH, DEFAULT_FONT_SIZE)
+        pulse_frame = float(os.getenv("DISPLAY_PULSE_FRAME_SEC", "0.08"))
+        status_pause = float(os.getenv("DISPLAY_STATUS_POLL_SEC", "0.35"))
+        alive = lambda: not stop_requested
 
-    while True:
-        pubsub.get_message(timeout=0.001)
+        while not stop_requested:
+            pubsub.get_message(timeout=0.001)
 
-        tz_name = _redis_timezone(r)
+            tz_name = _redis_timezone(r)
 
-        raw = (r.get(DISPLAY_STATE_KEY) or "").strip()
-        if not raw:
+            raw = (r.get(DISPLAY_STATE_KEY) or "").strip()
+            if not raw:
+                try:
+                    idle_tick(device, FONT_PATH, DEFAULT_FONT_SIZE, tz_name=tz_name)
+                except Exception as e:
+                    log.warning("idle: %s", e)
+                if not _sleep_interruptible(0.6, alive):
+                    break
+                continue
+
+            state = _parse_state(raw)
+            desired_rotate = max(0, min(3, _int_from_state(state, "rotate", DISPLAY_ROTATE)))
+            desired_font = max(8, min(48, _int_from_state(state, "font_size", DEFAULT_FONT_SIZE)))
+
+            if desired_rotate != current_rotate:
+                try:
+                    device = _load_device(desired_rotate)
+                    current_rotate = desired_rotate
+                    viz = PulseVisualizer(device, FONT_PATH, desired_font)
+                except Exception as e:
+                    log.warning("смена поворота %s: %s", desired_rotate, e)
+            else:
+                viz.set_font_sizes(desired_font)
+
+            if state.get("mode") == "pulse":
+                viz.set_state(state.get("state") or "idle")
+                viz.set_text(state.get("text") or "")
+                v = state.get("volume_hint")
+                if isinstance(v, (int, float)):
+                    viz.set_volume_hint(int(v))
+                try:
+                    viz.update()
+                except Exception as e:
+                    log.warning("draw pulse: %s", e)
+                if not _sleep_interruptible(pulse_frame, alive):
+                    break
+            else:
+                lines = _status_lines(state)
+                try:
+                    draw_status(device, FONT_PATH, lines, font_size=desired_font, tz_name=tz_name)
+                except Exception as e:
+                    log.warning("draw status: %s", e)
+                if not _sleep_interruptible(status_pause, alive):
+                    break
+    finally:
+        if device:
             try:
-                idle_tick(device, FONT_PATH, DEFAULT_FONT_SIZE, tz_name=tz_name)
+                clear_screen(device)
+                log.info("Экран очищен")
             except Exception as e:
-                log.warning("idle: %s", e)
-            time.sleep(0.6)
-            continue
-
-        state = _parse_state(raw)
-        desired_rotate = max(0, min(3, _int_from_state(state, "rotate", DISPLAY_ROTATE)))
-        desired_font = max(8, min(48, _int_from_state(state, "font_size", DEFAULT_FONT_SIZE)))
-
-        if desired_rotate != current_rotate:
-            try:
-                device = _load_device(desired_rotate)
-                current_rotate = desired_rotate
-                viz = PulseVisualizer(device, FONT_PATH, desired_font)
-            except Exception as e:
-                log.warning("смена поворота %s: %s", desired_rotate, e)
-        else:
-            viz.set_font_sizes(desired_font)
-
-        if state.get("mode") == "pulse":
-            viz.set_state(state.get("state") or "idle")
-            viz.set_text(state.get("text") or "")
-            v = state.get("volume_hint")
-            if isinstance(v, (int, float)):
-                viz.set_volume_hint(int(v))
-            try:
-                viz.update()
-            except Exception as e:
-                log.warning("draw pulse: %s", e)
-            time.sleep(pulse_frame)
-        else:
-            lines = _status_lines(state)
-            try:
-                draw_status(device, FONT_PATH, lines, font_size=desired_font, tz_name=tz_name)
-            except Exception as e:
-                log.warning("draw status: %s", e)
-            time.sleep(status_pause)
+                log.warning("очистка дисплея: %s", e)
 
 
 def _parse_state(raw: str) -> dict:
