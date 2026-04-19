@@ -1,0 +1,97 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #e8e8e8;
+  background: #121418;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.wrap {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+h1 {
+  font-size: 1.35rem;
+  margin: 0 0 0.25rem;
+}
+
+h2 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.muted {
+  color: #8b909a;
+  font-size: 0.85rem;
+  margin: 0 0 1rem;
+}
+
+.card {
+  background: #1a1d24;
+  border-radius: 10px;
+  padding: 1rem 1rem 1.1rem;
+  margin-bottom: 1rem;
+  border: 1px solid #2a2f3a;
+}
+
+dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 1rem;
+  font-size: 0.92rem;
+}
+
+dt {
+  color: #9aa3b2;
+}
+
+dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+textarea,
+select,
+button {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #2f3540;
+  background: #12151a;
+  color: inherit;
+  padding: 0.5rem 0.6rem;
+}
+
+button {
+  cursor: pointer;
+  background: #2d6cdf;
+  border-color: #3a7ae8;
+  font-weight: 600;
+}
+
+button:hover {
+  filter: brightness(1.06);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.35rem;
+}
+
+label {
+  font-size: 0.85rem;
+  color: #9aa3b2;
+  display: block;
+  margin-bottom: 0.25rem;
+}

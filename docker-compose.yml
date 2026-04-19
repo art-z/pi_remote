@@ -1,0 +1,110 @@
+# Raspberry Pi 4: build and run on the device (aarch64). See README.md.
+#
+# Базовый стек: nginx (порт 80), API, Redis, синхронизация с внешним сервером.
+# Дисплей ST7789 — профиль `pi` (SPI/GPIO): docker compose --profile pi up -d
+# Вентилятор PWM (scripts/fan_control_pwm.py) — профиль `fan`. Не дублировать с тем же скриптом на хосте.
+#
+# Расширение: добавляйте новые сервисы в ./services/ и подключайте к сети `pi_net`,
+# используйте Redis для очередей и pub/sub.
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    networks:
+      - pi_net
+
+  api:
+    build:
+      context: ./services/api
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      - redis
+    expose:
+      - "8000"
+    networks:
+      - pi_net
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/html:/usr/share/nginx/html:ro
+    depends_on:
+      - api
+    networks:
+      - pi_net
+
+  sync-worker:
+    build:
+      context: ./services/sync-worker
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      - redis
+    networks:
+      - pi_net
+
+  # ST7789 (luma.lcd): требует /dev/spidev*, gpio. Запуск: --profile pi
+  display:
+    profiles:
+      - pi
+    build:
+      context: ./services/display
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/spidev0.0:/dev/spidev0.0
+      - /dev/gpiomem:/dev/gpiomem
+    group_add:
+      - dialout
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      - redis
+    networks:
+      - pi_net
+
+  fan:
+    profiles:
+      - fan
+    build:
+      context: ./services/fan
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/gpiomem:/dev/gpiomem
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      - redis
+    networks:
+      - pi_net
+
+networks:
+  pi_net:
+    driver: bridge
+
+volumes:
+  redis-data:

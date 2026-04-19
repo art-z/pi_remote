@@ -1,0 +1,6 @@
+redis==5.2.1
+Pillow==10.4.0
+numpy==1.26.4
+luma.lcd==2.11.0
+luma.core==2.6.0
+spidev==3.6

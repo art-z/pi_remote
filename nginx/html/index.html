@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>pi_remote</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>Raspberry Pi</h1>
+    <p class="muted">Состояние обновляется каждые 2 с</p>
+
+    <section class="card" id="status-card">
+      <h2>Система</h2>
+      <dl id="metrics"></dl>
+    </section>
+
+    <section class="card">
+      <h2>Дисплей</h2>
+      <label>Текст</label>
+      <textarea id="disp-text" rows="3" placeholder="Строка на ST7789"></textarea>
+      <div class="row">
+        <label>Режим</label>
+        <select id="disp-mode">
+          <option value="status">status</option>
+          <option value="pulse">pulse</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Состояние (pulse)</label>
+        <select id="disp-state">
+          <option value="idle">idle</option>
+          <option value="listening">listening</option>
+          <option value="responding">responding</option>
+        </select>
+      </div>
+      <button type="button" id="btn-apply">Применить на дисплей</button>
+      <p id="disp-msg" class="muted"></p>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
