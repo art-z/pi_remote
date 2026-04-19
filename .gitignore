@@ -5,3 +5,7 @@ venv
 
 test
 prev
+
+# Vosk (скачать вручную, см. models/README.md)
+models/vosk-model-small-ru-0.22/
+models/*.zip

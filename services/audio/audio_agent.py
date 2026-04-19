@@ -1,6 +1,6 @@
 """
 Микрофон (ALSA raw 16 kHz mono) → Vosk STT (русский) → Redis display:state + display:notify.
-Модель по умолчанию: small-ru (см. Dockerfile); переопределение: AUDIO_MODEL_PATH на смонтированный том.
+Модель: каталог на хосте монтируется в AUDIO_MODEL_PATH (по умолчанию /opt/vosk-model); см. models/README.md.
 """
 
 from __future__ import annotations

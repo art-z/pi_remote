@@ -75,7 +75,7 @@ uname -a
 - Сборка образов **на самой Pi** (aarch64) или `docker buildx build --platform linux/arm64`.
 - Для `**display`**: доступ к `**/dev/spidev0.0`**, `**/dev/gpiomem**` Распиновка ST7789, подсветка и замечания по GPIO: `**services/display/README.md**`.
 - Для `**fan**`: GPIO (контейнер с `privileged` и `/dev/gpiomem`), пин — в `.env` (`FAN_GPIO`).
-- Для `**audio**`: `/dev/snd`, в `.env` задайте `AUDIO_ALSA_DEVICE` (на хосте: `arecord -l`). Подробно про `plughw:1,0` и проверку микрофона — `**services/audio/README.md**`. Без микрофона закомментируйте сервис `**audio**` в `**docker-compose.yml**`.
+- Для `**audio**`: `/dev/snd`, модель Vosk с диска (скачивание и путь: **`models/README.md`**, по умолчанию `./models/vosk-model-small-ru-0.22`), при другом каталоге — `VOSK_MODEL_HOST_DIR` в `.env`; микрофон — `AUDIO_ALSA_DEVICE` (`arecord -l`). Подробно про ALSA — `**services/audio/README.md**`. Без микрофона закомментируйте сервис `**audio**` в `**docker-compose.yml**`.
 
 ### Поднятие стека
 

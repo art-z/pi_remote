@@ -1,18 +1,11 @@
-# STT + ALSA: сборка на Raspberry Pi (aarch64). Модель small-ru (~45 MB) — быстрый русский Vosk.
+# STT + ALSA: сборка на Raspberry Pi (aarch64). Модель Vosk не в образе — монтируйте каталог с хоста (см. models/README.md и docker-compose).
 FROM python:3.11-slim-bookworm
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget \
-    ca-certificates \
-    unzip \
     alsa-utils \
     libasound2 \
-    && wget -q https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip -O /tmp/vosk-ru.zip \
-    && unzip -q /tmp/vosk-ru.zip -d /opt \
-    && mv /opt/vosk-model-small-ru-0.22 /opt/vosk-model \
-    && rm -f /tmp/vosk-ru.zip \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

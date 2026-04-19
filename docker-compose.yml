@@ -98,6 +98,9 @@ services:
     build:
       context: ./services/audio
     restart: unless-stopped
+    volumes:
+      # Распакованная модель на хосте → см. models/README.md и VOSK_MODEL_HOST_DIR в .env
+      - ${VOSK_MODEL_HOST_DIR:-./models/vosk-model-small-ru-0.22}:/opt/vosk-model:ro
     devices:
       - /dev/snd:/dev/snd
     env_file:

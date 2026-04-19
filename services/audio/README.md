@@ -4,6 +4,16 @@
 
 Сборка образа — **на Raspberry Pi** (или `docker buildx` под `linux/arm64`), см. корневой `README.md`.
 
+## Модель Vosk (на диске, не в образе)
+
+Образ **не** качает модель: каталог с распакованной **small-ru** монтируется read-only в `/opt/vosk-model`.
+
+- **Прямая ссылка на ZIP:** https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip  
+- Куда положить и как распаковать: **`models/README.md`** в корне репозитория.  
+- Другой путь на хосте: переменная **`VOSK_MODEL_HOST_DIR`** в `.env` (см. `docker-compose.yml` у сервиса `audio`).
+
+Внутри контейнера путь к модели задаётся **`AUDIO_MODEL_PATH`** (по умолчанию `/opt/vosk-model` и должен совпадать с правой частью volume).
+
 ---
 
 ## Устройство захвата: `AUDIO_ALSA_DEVICE`
@@ -95,7 +105,8 @@ docker compose logs -f audio
 |------------|----------------|------------|
 | `REDIS_URL` | `redis://redis:6379/0` | Подключение к Redis (как у `api` / `display`). |
 | `DISPLAY_STATE_KEY` / `DISPLAY_NOTIFY_CHANNEL` | как в корневом `.env.example` | Куда писать текст и сигнал дисплею. |
-| `AUDIO_MODEL_PATH` | `/opt/vosk-model` | Каталог распакованной модели Vosk; в образе уже **small-ru**; можно смонтировать том с другой моделью. |
+| `AUDIO_MODEL_PATH` | `/opt/vosk-model` | Каталог модели **внутри контейнера**; совпадает с mount из `VOSK_MODEL_HOST_DIR`. Другая модель — другой mount + при необходимости другой путь в `AUDIO_MODEL_PATH`. |
+| `VOSK_MODEL_HOST_DIR` | `./models/vosk-model-small-ru-0.22` | Только в **docker-compose** / `.env`: откуда на хосте брать распакованную модель. |
 | `AUDIO_SAMPLE_RATE` | `16000` | Частота захвата; под эту модель Vosk нужен **16 kHz**. |
 | `AUDIO_CHUNK_BYTES` | `8000` | Размер чанка чтения из `arecord` (кратно 2 байтам на сэмпл). |
 | `AUDIO_PARTIAL_PUBLISH_SEC` | `0.25` | Не чаще этого интервала слать **частичный** текст в Redis (меньше мигания на экране). |
@@ -113,5 +124,5 @@ docker compose logs -f audio
 
 ## Полезные ссылки
 
-- [Модели Vosk](https://alphacephei.com/vosk/models) — при смене модели положите распакованный каталог и укажите `AUDIO_MODEL_PATH`.
+- [Модели Vosk](https://alphacephei.com/vosk/models) — каталог на хосте должен совпадать с ожидаемой структурой модели (как после распаковки ZIP).
 - Документация ALSA: имена `hw`, `plughw`, `default` — в справочнике `arecord` (`man arecord` на системе).
