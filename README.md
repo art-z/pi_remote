@@ -75,7 +75,7 @@ uname -a
 
 - **Docker** и **Docker Compose v2**.
 - Сборка образов **на самой Pi** (aarch64) или `docker buildx build --platform linux/arm64`.
-- Для `**display`**: доступ к `**/dev/spidev0.0**`, `**/dev/gpiomem**` (см. `prev/docker-compose.yml`).
+- Для `**display`**: доступ к `**/dev/spidev0.0**`, `**/dev/gpiomem**` (см. `prev/docker-compose.yml`). Распиновка ST7789, подсветка и замечания по GPIO: **`services/display/README.md`**.
 - Для `**fan**`: GPIO (контейнер с `privileged` и `/dev/gpiomem`), пин — в `.env` (`FAN_GPIO`).
 
 ### Поднятие стека
