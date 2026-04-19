@@ -6,6 +6,7 @@ from __future__ import annotations
 import colorsys
 import os
 import textwrap
+from typing import Optional
 import time
 from datetime import datetime
 
@@ -16,17 +17,40 @@ WIDTH = int(os.getenv("DISPLAY_WIDTH", "240"))
 HEIGHT = int(os.getenv("DISPLAY_HEIGHT", "240"))
 CENTER = (WIDTH // 2, HEIGHT // 2)
 
+DEFAULT_FONT_SIZE = int(os.getenv("DISPLAY_FONT_SIZE", "17"))
+
+
+def _wrap_cols(body_px: int, font_px: int, ref_cols: int = 28, ref_px: int = 17) -> int:
+    """Грубая оценка числа колонок для textwrap при изменении кегля."""
+    return max(8, int(ref_cols * (ref_px / max(font_px, 1))))
+
 
 class PulseVisualizer:
-    def __init__(self, device, font_path: str):
+    def __init__(self, device, font_path: str, font_size: Optional[int] = None):
         self.text = ""
         self.color = "white"
         self.device = device
+        self._font_path = font_path
         self.volume_level = 0
         self.phase = 0.0
         self.state = "idle"
-        self.font = ImageFont.truetype(font_path, 18)
-        self.font_small = ImageFont.truetype(font_path, 16)
+        self._font_size_main = 0
+        self._font_size_small = 0
+        self.font = None  # type: ignore
+        self.font_small = None  # type: ignore
+        self.set_font_sizes(font_size)
+
+    def set_font_sizes(self, font_size: Optional[int]):
+        """Основной кегль и чуть меньший для подписей; при том же значении — без перезагрузки шрифтов."""
+        main = int(font_size) if font_size is not None else DEFAULT_FONT_SIZE
+        main = max(8, min(48, main))
+        small = max(10, main - 2)
+        if main == self._font_size_main and small == self._font_size_small:
+            return
+        self._font_size_main = main
+        self._font_size_small = small
+        self.font = ImageFont.truetype(self._font_path, main)
+        self.font_small = ImageFont.truetype(self._font_path, small)
 
     def set_state(self, state: str):
         self.state = state
@@ -76,16 +100,18 @@ class PulseVisualizer:
         draw.ellipse(bbox_outer, fill=color)
         draw.ellipse(bbox_inner, fill="black")
 
+        wrap_w = _wrap_cols(WIDTH - 20, self._font_size_small, ref_cols=26, ref_px=16)
         display_text = self.text
         lines: list[str] = []
         for paragraph in display_text.split("\n"):
-            for line in textwrap.wrap(paragraph, width=26) if paragraph else [""]:
+            for line in textwrap.wrap(paragraph, width=wrap_w) if paragraph else [""]:
                 if line:
                     lines.append(line)
         if len(lines) > 6:
             lines = lines[:6]
 
-        y = HEIGHT - 10 - 20 * len(lines) if lines else HEIGHT - 30
+        line_h = max(12, self._font_size_small + 4)
+        y = HEIGHT - 10 - line_h * len(lines) if lines else HEIGHT - 30
         for line in lines:
             draw.text((10, y), line, fill=self.color, font=self.font_small)
             bbox = draw.textbbox((10, y), line, font=self.font_small)
@@ -95,13 +121,23 @@ class PulseVisualizer:
             self.device.display(image)
 
 
-def draw_status(device, font_path: str, lines: list[str]):
+def draw_status(
+    device,
+    font_path: str,
+    lines: list[str],
+    font_size: Optional[int] = None,
+):
+    body = int(font_size) if font_size is not None else DEFAULT_FONT_SIZE
+    body = max(8, min(48, body))
+    clock_sz = max(10, body - 3)
+    wrap_w = _wrap_cols(WIDTH - 16, body)
+
     image = Image.new("RGB", (WIDTH, HEIGHT), "black")
     draw = ImageDraw.Draw(image)
-    font = ImageFont.truetype(font_path, 17)
+    font = ImageFont.truetype(font_path, body)
     y = 8
     for line in lines[:10]:
-        for sub in textwrap.wrap(line, width=28):
+        for sub in textwrap.wrap(line, width=wrap_w):
             draw.text((8, y), sub, fill="white", font=font)
             bbox = draw.textbbox((8, y), sub, font=font)
             y = bbox[3] + 4
@@ -113,16 +149,17 @@ def draw_status(device, font_path: str, lines: list[str]):
         (8, HEIGHT - 22),
         datetime.now().strftime("%H:%M:%S"),
         fill="#6a7380",
-        font=ImageFont.truetype(font_path, 14),
+        font=ImageFont.truetype(font_path, clock_sz),
     )
     if device:
         device.display(image)
 
 
-def idle_tick(device, font_path: str):
+def idle_tick(device, font_path: str, font_size: Optional[int] = None):
     """Лёгкий кадр при отсутствии Redis — чтобы не залипать на чёрном при старте."""
     draw_status(
         device,
         font_path,
         ["pi_remote", "ожидание Redis…", time.strftime("%Y-%m-%d")],
+        font_size=font_size,
     )

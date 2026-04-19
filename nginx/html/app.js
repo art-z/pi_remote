@@ -51,18 +51,14 @@ async function tick() {
   }
 }
 
-document.getElementById("btn-apply").addEventListener("click", async () => {
+/** Частичное обновление состояния дисплея (merge на сервере). */
+async function patchDisplay(patch) {
   dispMsg.textContent = "";
-  const body = {
-    text: document.getElementById("disp-text").value,
-    mode: document.getElementById("disp-mode").value,
-    state: document.getElementById("disp-state").value,
-  };
   try {
     const r = await fetch("/api/display", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(patch),
     });
     const j = await r.json();
     if (!r.ok) throw new Error(j.detail || JSON.stringify(j));
@@ -70,7 +66,66 @@ document.getElementById("btn-apply").addEventListener("click", async () => {
   } catch (e) {
     dispMsg.textContent = String(e.message || e);
   }
-});
+}
+
+const dispText = document.getElementById("disp-text");
+const dispMode = document.getElementById("disp-mode");
+const dispState = document.getElementById("disp-state");
+const dispRotate = document.getElementById("disp-rotate");
+const dispFont = document.getElementById("disp-font");
+const dispFontVal = document.getElementById("disp-font-val");
+
+let textDebounce = null;
+let fontDebounce = null;
+
+function scheduleTextPatch() {
+  clearTimeout(textDebounce);
+  textDebounce = setTimeout(() => {
+    patchDisplay({ text: dispText.value });
+  }, 350);
+}
+
+function scheduleFontPatch() {
+  const n = parseInt(dispFont.value, 10);
+  dispFontVal.textContent = Number.isFinite(n) ? `${n} px` : "";
+  clearTimeout(fontDebounce);
+  fontDebounce = setTimeout(() => {
+    if (Number.isFinite(n)) patchDisplay({ font_size: n });
+  }, 180);
+}
+
+async function loadDisplay() {
+  dispMsg.textContent = "";
+  try {
+    const d = await fetchJson("/api/display");
+    dispText.value = d.text ?? "";
+    if (d.mode === "status" || d.mode === "pulse") dispMode.value = d.mode;
+    if (d.state === "idle" || d.state === "listening" || d.state === "responding") {
+      dispState.value = d.state;
+    }
+    const rot = Number(d.rotate);
+    if (rot === 0 || rot === 1 || rot === 2 || rot === 3) {
+      dispRotate.value = String(rot);
+    }
+    const fs = Number(d.font_size);
+    if (Number.isFinite(fs) && fs >= 8 && fs <= 48) {
+      dispFont.value = String(Math.round(fs));
+    }
+    const n = parseInt(dispFont.value, 10);
+    dispFontVal.textContent = Number.isFinite(n) ? `${n} px` : "";
+  } catch (e) {
+    dispMsg.textContent = String(e.message || e);
+  }
+}
+
+dispText.addEventListener("input", scheduleTextPatch);
+dispMode.addEventListener("change", () => patchDisplay({ mode: dispMode.value }));
+dispState.addEventListener("change", () => patchDisplay({ state: dispState.value }));
+dispRotate.addEventListener("change", () =>
+  patchDisplay({ rotate: parseInt(dispRotate.value, 10) }),
+);
+dispFont.addEventListener("input", scheduleFontPatch);
 
 tick();
 setInterval(tick, 2000);
+loadDisplay();

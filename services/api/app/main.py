@@ -5,7 +5,7 @@ import logging
 import os
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, Literal
 
 import redis
 from dotenv import load_dotenv
@@ -33,15 +33,19 @@ _auto_sync_task: asyncio.Task | None = None
 
 
 def _load_display_state() -> dict[str, Any]:
+    base = _default_display_state()
     if not r:
-        return _default_display_state()
+        return base
     raw = r.get(DISPLAY_STATE_KEY)
     if not raw:
-        return _default_display_state()
+        return base
     try:
-        return json.loads(raw)
+        cur = json.loads(raw)
+        if not isinstance(cur, dict):
+            return base
+        return {**base, **cur}
     except json.JSONDecodeError:
-        return _default_display_state()
+        return base
 
 
 @asynccontextmanager
@@ -92,13 +96,25 @@ app.add_middleware(
 
 
 class DisplayPayload(BaseModel):
-    text: str = ""
-    mode: str = Field(default="status", pattern="^(status|pulse)$")
-    state: str = Field(default="idle", pattern="^(idle|listening|responding)$")
+    """Поля опциональны: в запросе передавайте только то, что меняете (merge с предыдущим состоянием)."""
+
+    text: str | None = None
+    mode: Literal["status", "pulse"] | None = None
+    state: Literal["idle", "listening", "responding"] | None = None
+    # luma ST7789: 0=0°, 1=90°, 2=180°, 3=270°
+    rotate: int | None = Field(default=None, ge=0, le=3)
+    font_size: int | None = Field(default=None, ge=8, le=48)
 
 
 def _default_display_state() -> dict[str, Any]:
-    return {"text": "", "mode": "status", "state": "idle", "volume_hint": 0}
+    return {
+        "text": "",
+        "mode": "status",
+        "state": "idle",
+        "volume_hint": 0,
+        "rotate": int(os.getenv("DISPLAY_ROTATE", "2")),
+        "font_size": int(os.getenv("DISPLAY_FONT_SIZE", "17")),
+    }
 
 
 @app.get("/api/health")
@@ -138,7 +154,8 @@ def set_display(body: DisplayPayload):
     if not r:
         raise HTTPException(503, "Redis недоступен")
     prev = _load_display_state()
-    data = {**prev, **body.model_dump()}
+    patch = body.model_dump(exclude_unset=True, exclude_none=True)
+    data = {**prev, **patch}
     r.set(DISPLAY_STATE_KEY, json.dumps(data, ensure_ascii=False))
     try:
         r.publish(DISPLAY_NOTIFY_CHANNEL, "1")

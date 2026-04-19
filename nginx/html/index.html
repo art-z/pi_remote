@@ -35,7 +35,17 @@
           <option value="responding">responding</option>
         </select>
       </div>
-      <button type="button" id="btn-apply">Применить на дисплей</button>
+      <div class="row">
+        <label>Поворот экрана</label>
+        <select id="disp-rotate" title="luma: 0=0°, 1=90°, 2=180°, 3=270°">
+          <option value="0">0°</option>
+          <option value="1">90°</option>
+          <option value="2">180°</option>
+          <option value="3">270°</option>
+        </select>
+      </div>
+      <label for="disp-font">Размер шрифта <span id="disp-font-val" class="muted"></span></label>
+      <input type="range" id="disp-font" min="8" max="48" step="1" />
       <p id="disp-msg" class="muted"></p>
     </section>
   </main>

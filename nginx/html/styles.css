@@ -59,7 +59,8 @@ dd {
 
 textarea,
 select,
-button {
+button,
+input[type="range"] {
   width: 100%;
   box-sizing: border-box;
   margin-bottom: 0.65rem;
