@@ -67,42 +67,25 @@ uname -a
 
 ### Стек
 
-**nginx** (статика и reverse proxy на порт 80) → **FastAPI** (один worker uvicorn) → внутренняя сеть `pi_net`. Рядом: **Redis** (очереди и pub/sub для дисплея), **sync-worker** (исходящая синхронизация JSON на внешний сервер по `REMOTE_SYNC_URL`).
+**nginx** (статика и reverse proxy на порт 80) → **FastAPI** (один worker uvicorn) → внутренняя сеть `pi_net`. Рядом: **Redis** (очереди и pub/sub для дисплея), **sync-worker** (исходящая синхронизация JSON на внешний сервер по `REMOTE_SYNC_URL`), **display** (ST7789, `luma.lcd`), **fan** (PWM на BCM **13**, как в `scripts/fan_control_pwm.py`).
 
-Опционально, профили Compose:
-
-- **`pi`** — агент дисплея **ST7789** (`luma.lcd`), SPI и GPIO на хосте.
-- **`fan`** — **PWM**-вентилятор на BCM **13** (логика как в `scripts/fan_control_pwm.py`).
-
-Переменные окружения — из **`.env`** (шаблон **`.env.example`**).
+Переменные окружения — из **`.env`** (шаблон **`.env.example`**). Если на машине нет SPI/GPIO, закомментируйте сервисы **`display`** и/или **`fan`** в **`docker-compose.yml`**.
 
 ### Требования и железо
 
 - **Docker** и **Docker Compose v2**.
 - Сборка образов **на самой Pi** (aarch64) или `docker buildx build --platform linux/arm64`.
-- Для профиля **`pi`**: доступ к **`/dev/spidev0.0`**, **`/dev/gpiomem`** (см. также `prev/docker-compose.yml`).
-- Для профиля **`fan`**: GPIO (контейнер с `privileged` и `/dev/gpiomem`), пин вентилятора задаётся в `.env` (`FAN_GPIO`).
+- Для **`display`**: доступ к **`/dev/spidev0.0`**, **`/dev/gpiomem`** (см. `prev/docker-compose.yml`).
+- Для **`fan`**: GPIO (контейнер с `privileged` и `/dev/gpiomem`), пин — в `.env` (`FAN_GPIO`).
 
 ### Поднятие стека
 
-1. Конфиг: `cp .env.example .env`, при необходимости заполните `REMOTE_SYNC_URL`, токены, пороги вентилятора и параметры дисплея.
+1. Конфиг: `cp .env.example .env`, при необходимости заполните `REMOTE_SYNC_URL`, токены, пороги вентилятора и параметры дисплея (как в `prev/display.py`: 240×240, SPI 80 МГц, поворот 180° → в luma **`DISPLAY_ROTATE=2`**).
 
-2. Базовый набор (веб + API + Redis + sync-worker):
+2. Весь стек сразу (веб, API, Redis, sync-worker, **дисплей**, **вентилятор**):
 
    ```bash
    docker compose up -d --build
-   ```
-
-3. Плюс дисплей ST7789 (как в `prev/display.py`: 240×240, SPI 80 МГц, поворот 180° → в luma **`DISPLAY_ROTATE=2`**):
-
-   ```bash
-   docker compose --profile pi up -d --build
-   ```
-
-4. Плюс вентилятор PWM в Docker:
-
-   ```bash
-   docker compose --profile fan up -d --build
    ```
 
    На том же GPIO нельзя одновременно держать хостовый скрипт вентилятора и контейнер **`fan`** — см. **часть 2**.
@@ -118,7 +101,7 @@ API в контейнере видит **cgroup**-лимиты Docker. Для «
 
 Температура: сначала **`vcgencmd`**, при отсутствии — sysfs (`CPU_TEMP_SYSFS` в `.env`).
 
-### Очередь и внешний сервер
+### Очередь и внешний сервер  
 
 - События в Redis **`LIST`** (`SYNC_QUEUE_KEY`, по умолчанию `sync:outbound`).
 - **`sync-worker`** делает **POST** на полный URL **`REMOTE_SYNC_URL`** с телом JSON и опционально **`Authorization: Bearer <REMOTE_SYNC_TOKEN>`**.
@@ -139,9 +122,9 @@ API в контейнере видит **cgroup**-лимиты Docker. Для «
 
 ### Вентилятор: хост (`scripts/fan_control_pwm.py`) и Docker (`fan`)
 
-Не запускайте одновременно **хостовый** PWM-скрипт и контейнер с профилем **`fan`** — один пин (**BCM 13** по умолчанию).
+Не запускайте одновременно **хостовый** PWM-скрипт и контейнер **`fan`** — один пин (**BCM 13** по умолчанию).
 
-Перед `docker compose --profile fan up` отключите хостовый вентилятор:
+Перед `docker compose up` отключите хостовый вентилятор:
 
 - **systemd:** `systemctl list-units --type=service --all | grep -i fan` → `sudo systemctl stop <имя>` и при необходимости `sudo systemctl disable <имя>`;
 - **cron / @reboot:** `crontab -l` — удалите строки с `fan_control` / `fan_control_pwm`;
@@ -186,5 +169,5 @@ API в контейнере видит **cgroup**-лимиты Docker. Для «
 
 **6. Конфликт с pi_remote по железу**
 
-Если на хосте уже заняты **GPIO / SPI / PWM**, сначала освободите их способами выше, **потом** поднимайте профили **`pi`** / **`fan`**. Два процесса не должны открывать один пин или **`/dev/spidev0.0`**.
+Если на хосте уже заняты **GPIO / SPI / PWM**, сначала освободите их способами выше, **потом** поднимайте стек (или закомментируйте **`display`** / **`fan`** в **`docker-compose.yml`**, пока тестируете без железа). Два процесса не должны открывать один пин или **`/dev/spidev0.0`**.
  

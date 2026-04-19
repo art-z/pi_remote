@@ -1,6 +1,6 @@
+# luma.core не фиксируем — подтягивается как зависимость luma.lcd (версия 2.6.0 на PyPI отсутствует).
 redis==5.2.1
-Pillow==10.4.0
-numpy==1.26.4
-luma.lcd==2.11.0
-luma.core==2.6.0
-spidev==3.6
+Pillow>=10,<11
+numpy>=1.26,<2.1
+luma.lcd>=2.11.0,<3
+spidev>=3.6,<4

@@ -1,11 +1,8 @@
 # Raspberry Pi 4: build and run on the device (aarch64). See README.md.
 #
-# Базовый стек: nginx (порт 80), API, Redis, синхронизация с внешним сервером.
-# Дисплей ST7789 — профиль `pi` (SPI/GPIO): docker compose --profile pi up -d
-# Вентилятор PWM (scripts/fan_control_pwm.py) — профиль `fan`. Не дублировать с тем же скриптом на хосте.
-#
-# Расширение: добавляйте новые сервисы в ./services/ и подключайте к сети `pi_net`,
-# используйте Redis для очередей и pub/sub.
+# Полный стек: nginx, API, Redis, sync-worker, display (ST7789), fan (PWM).
+# Без SPI/GPIO на хосте закомментируйте display и/или fan.
+# Расширение: сервисы в ./services/, сеть pi_net, Redis.
 
 services:
   redis:
@@ -60,10 +57,7 @@ services:
     networks:
       - pi_net
 
-  # ST7789 (luma.lcd): требует /dev/spidev*, gpio. Запуск: --profile pi
   display:
-    profiles:
-      - pi
     build:
       context: ./services/display
     restart: unless-stopped
@@ -84,8 +78,6 @@ services:
       - pi_net
 
   fan:
-    profiles:
-      - fan
     build:
       context: ./services/fan
     restart: unless-stopped
