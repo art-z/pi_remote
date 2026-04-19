@@ -97,6 +97,10 @@ docker compose logs -f audio
 
 Сообщения о завершении `arecord` или ALSA чаще всего означают неверный `-D` или отсутствие микрофона.
 
+### `libvosk.so` / `libatomic.so.1: No such file or directory`
+
+В образе `audio` должен быть пакет **`libatomic1`** (зависимость нативной библиотеки из wheel Vosk). Если собирали старый Dockerfile без него — пересоберите образ: `docker compose build --no-cache audio`.
+
 ---
 
 ## Остальные переменные (кратко)
