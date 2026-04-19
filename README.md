@@ -1,68 +1,11 @@
 # pi_remote
 
-Raspberry Pi 4 Model B Rev 1.4
-
-PRETTY_NAME="Ubuntu 22.04.5 LTS"
-NAME="Ubuntu"
-VERSION_ID="22.04"
-VERSION="22.04.5 LTS (Jammy Jellyfish)"
-VERSION_CODENAME=jammy
-ID=ubuntu
-ID_LIKE=debian
-HOME_URL="[https://www.ubuntu.com/](https://www.ubuntu.com/)"
-SUPPORT_URL="[https://help.ubuntu.com/](https://help.ubuntu.com/)"
-BUG_REPORT_URL="[https://bugs.launchpad.net/ubuntu/](https://bugs.launchpad.net/ubuntu/)"
-PRIVACY_POLICY_URL="[https://www.ubuntu.com/legal/terms-and-policies/privacy-policy](https://www.ubuntu.com/legal/terms-and-policies/privacy-policy)"
-UBUNTU_CODENAME=jammy
-
-processor       : 0
-BogoMIPS        : 108.00
-Features        : fp asimd evtstrm crc32 cpuid
-CPU implementer : 0x41
-CPU architecture: 8
-CPU variant     : 0x0
-CPU part        : 0xd08
-CPU revision    : 3
-
-processor       : 1
-BogoMIPS        : 108.00
-Features        : fp asimd evtstrm crc32 cpuid
-CPU implementer : 0x41
-CPU architecture: 8
-CPU variant     : 0x0
-CPU part        : 0xd08
-CPU revision    : 3
-
-processor       : 2
-BogoMIPS        : 108.00
-Features        : fp asimd evtstrm crc32 cpuid
-CPU implementer : 0x41
-CPU architecture: 8
-CPU variant     : 0x0
-CPU part        : 0xd08
-CPU revision    : 3
-
-processor       : 3
-BogoMIPS        : 108.00
-Features        : fp asimd evtstrm crc32 cpuid
-CPU implementer : 0x41
-CPU architecture: 8
-CPU variant     : 0x0
-CPU part        : 0xd08
-CPU revision    : 3
-
-Hardware        : BCM2835
-Revision        : b03114
-Serial          : 10000000fe35d4e2
-Model           : Raspberry Pi 4 Model B Rev 1.4
-uname -a
+Raspberry Pi 4 Model B Rev 1.4 Ubuntu 22.04.5 LTS 
 
 ---
 
 ## Docker: стек, поднятие, работа, железо
-
-**проект pi_remote в контейнерах**: что за сервисы, как поднять, как пользоваться, что нужно от платы.
-
+ 
 ### Стек
 
 **nginx** (статика и reverse proxy на порт 80) → **FastAPI** (один worker uvicorn) → внутренняя сеть `pi_net`. Рядом: **Redis** (очереди и pub/sub для дисплея), **sync-worker** (исходящая синхронизация JSON на внешний сервер по `REMOTE_SYNC_URL`), **display** (ST7789, `luma.lcd`), **fan** (PWM на BCM **13**, как в `scripts/fan_control_pwm.py`), **audio** (микрофон ALSA → **Vosk** small-ru, текст в `display:state` / `display:notify`).
@@ -84,8 +27,7 @@ uname -a
   ```bash
    docker compose up -d --build
   ```
-   На том же GPIO нельзя одновременно держать хостовый скрипт вентилятора и контейнер `**fan**` — см. **часть 2**.
-
+  
 ### Работа: веб и API
 
 - В браузере: `http://<IP_малины>/` — метрики и форма управления дисплеем.

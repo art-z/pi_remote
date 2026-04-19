@@ -13,6 +13,8 @@ import os
 import signal
 import subprocess
 import time
+import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 import redis
@@ -35,6 +37,13 @@ PARTIAL_PUBLISH_SEC = float(os.getenv("AUDIO_PARTIAL_PUBLISH_SEC", "0.25"))
 DISPLAY_MODE = (os.getenv("AUDIO_DISPLAY_MODE", "pulse") or "pulse").strip().lower()
 if DISPLAY_MODE not in ("pulse", "status"):
     DISPLAY_MODE = "pulse"
+
+SYNC_QUEUE_KEY = os.getenv("SYNC_QUEUE_KEY", "sync:outbound")
+AUDIO_HISTORY_KEY = os.getenv("AUDIO_HISTORY_KEY", "audio:history")
+AUDIO_HISTORY_MAX = int(os.getenv("AUDIO_HISTORY_MAX", "500"))
+AUDIO_STORE_HISTORY = os.getenv("AUDIO_STORE_HISTORY", "true").lower() in ("1", "true", "yes")
+AUDIO_PUSH_TO_SYNC_QUEUE = os.getenv("AUDIO_PUSH_TO_SYNC_QUEUE", "true").lower() in ("1", "true", "yes")
+REMOTE_SYNC_URL = os.getenv("REMOTE_SYNC_URL", "").strip()
 
 
 def _default_display_state() -> dict[str, Any]:
@@ -82,6 +91,34 @@ def _rms_volume_hint(chunk: bytes) -> int:
     return min(100, int(rms / 80.0))
 
 
+def _persist_final_transcript(r: redis.Redis, text: str) -> None:
+    """Redis LIST последних распознаваний + постановка в sync:outbound для sync-worker → REMOTE_SYNC_URL."""
+    recognized_at = datetime.now(timezone.utc).isoformat()
+    record: dict[str, Any] = {
+        "id": uuid.uuid4().hex,
+        "text": text,
+        "recognized_at": recognized_at,
+        "lang": "ru",
+        "source": "pi_remote_audio",
+    }
+
+    if AUDIO_STORE_HISTORY and AUDIO_HISTORY_MAX > 0:
+        try:
+            r.lpush(AUDIO_HISTORY_KEY, json.dumps(record, ensure_ascii=False))
+            r.ltrim(AUDIO_HISTORY_KEY, 0, max(0, AUDIO_HISTORY_MAX - 1))
+        except redis.RedisError as e:
+            log.warning("audio history: %s", e)
+
+    if not AUDIO_PUSH_TO_SYNC_QUEUE or not REMOTE_SYNC_URL:
+        return
+
+    outbound = {"type": "stt", **record}
+    try:
+        r.lpush(SYNC_QUEUE_KEY, json.dumps(outbound, ensure_ascii=False))
+    except redis.RedisError as e:
+        log.warning("sync queue: %s", e)
+
+
 def _arecord_cmd() -> list[str]:
     return [
         "arecord",
@@ -107,7 +144,13 @@ def main() -> None:
     r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
     r.ping()
 
-    log.info("Загрузка Vosk из %s …", AUDIO_MODEL_PATH)
+    log.info(
+        "Загрузка Vosk из %s … (история %s, очередь sync=%s, remote=%s)",
+        AUDIO_MODEL_PATH,
+        "on" if AUDIO_STORE_HISTORY and AUDIO_HISTORY_MAX > 0 else "off",
+        "on" if AUDIO_PUSH_TO_SYNC_QUEUE and REMOTE_SYNC_URL else "off",
+        "set" if REMOTE_SYNC_URL else "empty",
+    )
     model = Model(AUDIO_MODEL_PATH)
     rec = KaldiRecognizer(model, SAMPLE_RATE)
     rec.SetWords(False)
@@ -157,6 +200,7 @@ def main() -> None:
                     text = (res.get("text") or "").strip()
                     if text:
                         log.info("final: %s", text)
+                        _persist_final_transcript(r, text)
                         _merge_display(
                             r,
                             {

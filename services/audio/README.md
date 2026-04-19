@@ -16,6 +16,57 @@
 
 ---
 
+## История в Redis и отправка на внешний сервер
+
+Учитываются только **финальные** фразы Vosk (не частичные подсказки).
+
+### Локальная «БД» = Redis
+
+- Ключ **`AUDIO_HISTORY_KEY`** (по умолчанию `audio:history`), тип **LIST**.
+- Каждый элемент — одна JSON-строка с полями: `id`, `text`, `recognized_at`, `lang`, `source` (см. ниже, без поля `type`).
+- Новые записи в начало (`LPUSH`), длина ограничена **`AUDIO_HISTORY_MAX`** (`LTRIM`).
+- Отключить: `AUDIO_STORE_HISTORY=false` или `AUDIO_HISTORY_MAX=0`.
+
+Просмотр с хоста (пример):
+
+```bash
+redis-cli -u "$REDIS_URL" LRANGE audio:history 0 4
+```
+
+### Очередь на тот же endpoint, что и sync-worker
+
+Если в `.env` задан **`REMOTE_SYNC_URL`**, и **`AUDIO_PUSH_TO_SYNC_QUEUE=true`**, после каждой финальной фразы в список **`SYNC_QUEUE_KEY`** (по умолчанию `sync:outbound`) кладётся JSON. Сервис **`sync-worker`** забирает его и делает **`POST`** на `REMOTE_SYNC_URL` с телом **ровно этим JSON** (как и для телеметрии `type: telemetry`).
+
+Если **`REMOTE_SYNC_URL` пустой**, в очередь **ничего не кладётся** (чтобы не забивать Redis при выключенной синхронизации).
+
+### Что получает удалённый сервер в теле POST
+
+`Content-Type: application/json`. Пример тела для распознанной речи:
+
+```json
+{
+  "type": "stt",
+  "id": "a1b2c3d4e5f6789012345678abcdef01",
+  "text": "пример распознанной фразы",
+  "recognized_at": "2026-04-19T14:32:01.234567+00:00",
+  "lang": "ru",
+  "source": "pi_remote_audio"
+}
+```
+
+| Поле | Тип | Смысл |
+|------|-----|--------|
+| `type` | строка | Всегда **`stt`** для событий с этого сервиса (отличайте от других, например `telemetry` из API). |
+| `id` | строка | Уникальный id события (hex). |
+| `text` | строка | Финальный текст распознавания. |
+| `recognized_at` | строка | Момент фиксации **UTC**, ISO 8601 с offset `+00:00`. |
+| `lang` | строка | Язык модели, сейчас **`ru`**. |
+| `source` | строка | Константа **`pi_remote_audio`**. |
+
+Заголовки: как у остальной синхронизации — при **`REMOTE_SYNC_TOKEN`** воркер шлёт `Authorization: Bearer <токен>`.
+
+---
+
 ## Устройство захвата: `AUDIO_ALSA_DEVICE`
 
 В `.env` задаётся строка **имени PCM-устройства ALSA**, которое передаётся в `arecord -D …`.
@@ -115,6 +166,11 @@ docker compose logs -f audio
 | `AUDIO_CHUNK_BYTES` | `8000` | Размер чанка чтения из `arecord` (кратно 2 байтам на сэмпл). |
 | `AUDIO_PARTIAL_PUBLISH_SEC` | `0.25` | Не чаще этого интервала слать **частичный** текст в Redis (меньше мигания на экране). |
 | `AUDIO_DISPLAY_MODE` | `pulse` | `pulse` или `status` — как отображать на дисплее (см. `viz.py` / `display_agent.py`). |
+| `AUDIO_STORE_HISTORY` | `true` | Писать ли финальные фразы в LIST `AUDIO_HISTORY_KEY`. |
+| `AUDIO_HISTORY_KEY` | `audio:history` | Ключ Redis LIST с последними распознаваниями. |
+| `AUDIO_HISTORY_MAX` | `500` | Максимум записей в LIST (старые отрезаются). `0` — не хранить. |
+| `AUDIO_PUSH_TO_SYNC_QUEUE` | `true` | Ставить ли события в `SYNC_QUEUE_KEY` при непустом `REMOTE_SYNC_URL`. |
+| `SYNC_QUEUE_KEY` / `REMOTE_SYNC_URL` / `REMOTE_SYNC_TOKEN` | как в `.env.example` | Общие с **sync-worker**; без URL очередь для STT не используется. |
 
 Поведение дисплея (`rotate`, `font_size`) агент **не затирает**: он мержит JSON с уже сохранённым состоянием.
 
