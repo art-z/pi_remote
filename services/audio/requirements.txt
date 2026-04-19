@@ -1,0 +1,3 @@
+redis==5.0.1
+python-dotenv==1.0.1
+vosk==0.3.44

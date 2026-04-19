@@ -1,6 +1,6 @@
 # Raspberry Pi 4: build and run on the device (aarch64). See README.md.
 #
-# Полный стек: nginx, API, Redis, sync-worker, display (ST7789), fan (PWM).
+# Полный стек: nginx, API, Redis, sync-worker, display (ST7789), fan (PWM), audio (STT).
 # Без SPI/GPIO на хосте закомментируйте display и/или fan.
 # Расширение: сервисы в ./services/, сеть pi_net, Redis.
 
@@ -84,6 +84,22 @@ services:
     privileged: true
     devices:
       - /dev/gpiomem:/dev/gpiomem
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      - redis
+    networks:
+      - pi_net
+
+  audio:
+    build:
+      context: ./services/audio
+    restart: unless-stopped
+    devices:
+      - /dev/snd:/dev/snd
     env_file:
       - path: .env
         required: false
