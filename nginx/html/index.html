@@ -17,6 +17,15 @@
     </section>
 
     <section class="card">
+      <h2>Локальное время</h2>
+      <p class="muted">IANA-пояс (например Europe/Moscow). Сохраняется в Redis; часы на ST7789 и время в блоке «Система».</p>
+      <label for="tz-input">Часовой пояс</label>
+      <input type="text" id="tz-input" placeholder="Europe/Moscow" spellcheck="false" autocomplete="off" />
+      <button type="button" id="tz-save">Сохранить пояс</button>
+      <p id="tz-msg" class="muted"></p>
+    </section>
+
+    <section class="card">
       <h2>Дисплей</h2>
       <label>Текст</label>
       <textarea id="disp-text" rows="3" placeholder="Строка на ST7789"></textarea>

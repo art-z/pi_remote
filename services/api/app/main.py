@@ -5,7 +5,9 @@ import logging
 import os
 import asyncio
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 import redis
 from dotenv import load_dotenv
@@ -25,11 +27,48 @@ DISPLAY_STATE_KEY = os.getenv("DISPLAY_STATE_KEY", "display:state")
 DISPLAY_NOTIFY_CHANNEL = os.getenv("DISPLAY_NOTIFY_CHANNEL", "display:notify")
 SYNC_QUEUE_KEY = os.getenv("SYNC_QUEUE_KEY", "sync:outbound")
 FAN_STATE_KEY = os.getenv("FAN_STATE_KEY", "fan:state")
+TIMEZONE_KEY = os.getenv("TIMEZONE_KEY", "system:timezone")
+DEFAULT_TIMEZONE = (os.getenv("DEFAULT_TIMEZONE", "Europe/Moscow") or "Europe/Moscow").strip()
 SYNC_AUTO = os.getenv("SYNC_AUTO", "false").lower() in ("1", "true", "yes")
 SYNC_INTERVAL_SEC = float(os.getenv("SYNC_INTERVAL_SEC", "60"))
 
 r: redis.Redis | None = None
 _auto_sync_task: asyncio.Task | None = None
+
+
+def _effective_timezone_name() -> str:
+    if not r:
+        return DEFAULT_TIMEZONE
+    raw = r.get(TIMEZONE_KEY)
+    if not raw or not str(raw).strip():
+        return DEFAULT_TIMEZONE
+    return str(raw).strip()
+
+
+def _local_clock_fields() -> dict[str, str]:
+    """Текущие локальные дата/время и пояс для /api/status (по сохранённому IANA)."""
+    name = _effective_timezone_name()
+    try:
+        z = ZoneInfo(name)
+        return {
+            "timezone": name,
+            "local_time": datetime.now(z).strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    except Exception:
+        z = ZoneInfo(DEFAULT_TIMEZONE)
+        return {
+            "timezone": DEFAULT_TIMEZONE,
+            "local_time": datetime.now(z).strftime("%Y-%m-%d %H:%M:%S"),
+            "timezone_invalid": name,
+        }
+
+
+def _validate_iana_timezone(name: str) -> str:
+    n = name.strip()
+    if not n:
+        raise ValueError("empty timezone")
+    ZoneInfo(n)
+    return n
 
 
 def _load_display_state() -> dict[str, Any]:
@@ -95,6 +134,10 @@ app.add_middleware(
 )
 
 
+class TimezonePayload(BaseModel):
+    timezone: str = Field(..., min_length=1, max_length=120)
+
+
 class DisplayPayload(BaseModel):
     """Поля опциональны: в запросе передавайте только то, что меняете (merge с предыдущим состоянием)."""
 
@@ -132,6 +175,7 @@ def health():
 @app.get("/api/status")
 def status():
     data = collect_status()
+    data.update(_local_clock_fields())
     if r:
         try:
             raw = r.get(FAN_STATE_KEY)
@@ -140,6 +184,31 @@ def status():
         except (json.JSONDecodeError, redis.RedisError):
             pass
     return data
+
+
+@app.get("/api/timezone")
+def get_timezone():
+    """Текущий сохранённый (или дефолтный) IANA-пояс."""
+    return {"timezone": _effective_timezone_name()}
+
+
+@app.post("/api/timezone")
+def set_timezone(body: TimezonePayload):
+    if not r:
+        raise HTTPException(503, "Redis недоступен")
+    try:
+        tz = _validate_iana_timezone(body.timezone)
+    except Exception:
+        raise HTTPException(
+            400,
+            "Неизвестный IANA-пояс (например Europe/Moscow, Europe/Berlin)",
+        ) from None
+    r.set(TIMEZONE_KEY, tz)
+    try:
+        r.publish(DISPLAY_NOTIFY_CHANNEL, "1")
+    except redis.RedisError as e:
+        log.warning("publish: %s", e)
+    return {"ok": True, "timezone": tz}
 
 
 @app.get("/api/display")

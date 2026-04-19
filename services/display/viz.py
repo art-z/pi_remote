@@ -6,9 +6,9 @@ from __future__ import annotations
 import colorsys
 import os
 import textwrap
-from typing import Optional
-import time
 from datetime import datetime
+from typing import Optional
+from zoneinfo import ZoneInfo
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -18,6 +18,19 @@ HEIGHT = int(os.getenv("DISPLAY_HEIGHT", "240"))
 CENTER = (WIDTH // 2, HEIGHT // 2)
 
 DEFAULT_FONT_SIZE = int(os.getenv("DISPLAY_FONT_SIZE", "17"))
+DEFAULT_TIMEZONE = (os.getenv("DEFAULT_TIMEZONE", "Europe/Moscow") or "Europe/Moscow").strip()
+
+
+def _now_for_clock(tz_name: Optional[str] = None) -> datetime:
+    """Текущее время для часов; при ошибке пояса — дефолт из env."""
+    name = (tz_name or "").strip() or DEFAULT_TIMEZONE
+    try:
+        return datetime.now(ZoneInfo(name))
+    except Exception:
+        try:
+            return datetime.now(ZoneInfo(DEFAULT_TIMEZONE))
+        except Exception:
+            return datetime.now()
 
 
 def _wrap_cols(body_px: int, font_px: int, ref_cols: int = 28, ref_px: int = 17) -> int:
@@ -126,6 +139,7 @@ def draw_status(
     font_path: str,
     lines: list[str],
     font_size: Optional[int] = None,
+    tz_name: Optional[str] = None,
 ):
     body = int(font_size) if font_size is not None else DEFAULT_FONT_SIZE
     body = max(8, min(48, body))
@@ -147,7 +161,7 @@ def draw_status(
             break
     draw.text(
         (8, HEIGHT - 22),
-        datetime.now().strftime("%H:%M:%S"),
+        _now_for_clock(tz_name).strftime("%H:%M:%S"),
         fill="#6a7380",
         font=ImageFont.truetype(font_path, clock_sz),
     )
@@ -155,11 +169,12 @@ def draw_status(
         device.display(image)
 
 
-def idle_tick(device, font_path: str, font_size: Optional[int] = None):
+def idle_tick(device, font_path: str, font_size: Optional[int] = None, tz_name: Optional[str] = None):
     """Лёгкий кадр при отсутствии Redis — чтобы не залипать на чёрном при старте."""
     draw_status(
         device,
         font_path,
-        ["pi_remote", "ожидание Redis…", time.strftime("%Y-%m-%d")],
+        ["pi_remote", "ожидание Redis…", _now_for_clock(tz_name).strftime("%Y-%m-%d")],
         font_size=font_size,
+        tz_name=tz_name,
     )

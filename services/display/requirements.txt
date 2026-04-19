@@ -3,6 +3,7 @@ python-dotenv>=1.0.1,<2
 # luma ST7789 (подсветка) импортирует RPi.GPIO — ставим явно
 RPi.GPIO>=0.7.1,<0.8
 redis==5.2.1
+tzdata>=2024.1
 Pillow>=10,<11
 numpy>=1.26,<2.1
 luma.lcd>=2.11.0,<3

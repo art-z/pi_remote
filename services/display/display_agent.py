@@ -24,6 +24,8 @@ log = logging.getLogger("display")
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 DISPLAY_STATE_KEY = os.getenv("DISPLAY_STATE_KEY", "display:state")
 DISPLAY_NOTIFY_CHANNEL = os.getenv("DISPLAY_NOTIFY_CHANNEL", "display:notify")
+TIMEZONE_KEY = os.getenv("TIMEZONE_KEY", "system:timezone")
+DEFAULT_TIMEZONE = (os.getenv("DEFAULT_TIMEZONE", "Europe/Moscow") or "Europe/Moscow").strip()
 FONT_PATH = os.getenv("DISPLAY_FONT_PATH", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
 
 SPI_PORT = int(os.getenv("DISPLAY_SPI_PORT", "0"))
@@ -69,6 +71,13 @@ def _load_device(rotate: Optional[int] = None):
     return st7789(**dev_kw)
 
 
+def _redis_timezone(r: redis.Redis) -> str:
+    raw = r.get(TIMEZONE_KEY)
+    if not raw or not str(raw).strip():
+        return DEFAULT_TIMEZONE
+    return str(raw).strip()
+
+
 def _int_from_state(state: dict, key: str, default: int) -> int:
     v = state.get(key)
     if v is None:
@@ -111,10 +120,12 @@ def main():
     while True:
         pubsub.get_message(timeout=0.001)
 
+        tz_name = _redis_timezone(r)
+
         raw = (r.get(DISPLAY_STATE_KEY) or "").strip()
         if not raw:
             try:
-                idle_tick(device, FONT_PATH, DEFAULT_FONT_SIZE)
+                idle_tick(device, FONT_PATH, DEFAULT_FONT_SIZE, tz_name=tz_name)
             except Exception as e:
                 log.warning("idle: %s", e)
             time.sleep(0.6)
@@ -148,7 +159,7 @@ def main():
         else:
             lines = _status_lines(state)
             try:
-                draw_status(device, FONT_PATH, lines, font_size=desired_font)
+                draw_status(device, FONT_PATH, lines, font_size=desired_font, tz_name=tz_name)
             except Exception as e:
                 log.warning("draw status: %s", e)
             time.sleep(status_pause)

@@ -1,5 +1,8 @@
 const metricsEl = document.getElementById("metrics");
 const dispMsg = document.getElementById("disp-msg");
+const tzInput = document.getElementById("tz-input");
+const tzSave = document.getElementById("tz-save");
+const tzMsg = document.getElementById("tz-msg");
 
 async function fetchJson(path) {
   const r = await fetch(path);
@@ -14,8 +17,17 @@ function renderMetrics(data) {
     ["Load 1m", data.load_avg?.[0]?.toFixed(2)],
     ["Темп. °C", data.cpu_temp_c != null ? data.cpu_temp_c.toFixed(1) : "—"],
     ["Диск %", data.disk_percent?.toFixed(1)],
-    ["Время", data.uptime_human],
+    ["Аптайм", data.uptime_human],
   ];
+  if (data.timezone) {
+    rows.push(["Пояс", data.timezone]);
+  }
+  if (data.local_time) {
+    rows.push(["Локальное время", data.local_time]);
+  }
+  if (data.timezone_invalid) {
+    rows.push(["Пояс (некорректный в Redis)", data.timezone_invalid]);
+  }
   if (data.fan && typeof data.fan === "object") {
     const f = data.fan;
     let fanStr =
@@ -126,6 +138,38 @@ dispRotate.addEventListener("change", () =>
 );
 dispFont.addEventListener("input", scheduleFontPatch);
 
+async function loadTimezone() {
+  tzMsg.textContent = "";
+  try {
+    const j = await fetchJson("/api/timezone");
+    tzInput.value = j.timezone ?? "";
+  } catch (e) {
+    tzMsg.textContent = String(e.message || e);
+  }
+}
+
+tzSave.addEventListener("click", async () => {
+  tzMsg.textContent = "";
+  try {
+    const r = await fetch("/api/timezone", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ timezone: tzInput.value.trim() }),
+    });
+    const j = await r.json();
+    if (!r.ok) {
+      const err = j.detail;
+      throw new Error(typeof err === "string" ? err : JSON.stringify(err ?? j));
+    }
+    tzMsg.textContent = "Сохранено";
+    if (j.timezone) tzInput.value = j.timezone;
+    tick();
+  } catch (e) {
+    tzMsg.textContent = String(e.message || e);
+  }
+});
+
 tick();
 setInterval(tick, 2000);
 loadDisplay();
+loadTimezone();
