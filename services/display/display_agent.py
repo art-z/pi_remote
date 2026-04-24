@@ -43,6 +43,29 @@ SPI_SPEED_HZ = os.getenv("DISPLAY_SPI_SPEED_HZ", "").strip()
 # Подсветка: в luma по умолчанию gpio_LIGHT=18 (как backlight в prev/display.py). Не задавайте — будет 18.
 GPIO_LIGHT = os.getenv("DISPLAY_GPIO_LIGHT", "").strip()
 
+# luma.core.interface.serial.spi: bus_speed_hz только из этого ряда (МГц → Гц)
+_LUMA_SPI_BUS_SPEEDS_HZ = tuple(
+    int(m * 1_000_000) for m in (0.5, 1, 2, 4, 8, 16, 20, 24, 28, 32, 36, 40, 44, 48, 50, 52)
+)
+
+
+def _spi_bus_speed_hz_from_env(raw: str) -> int | None:
+    if not raw:
+        return None
+    hz = int(raw)
+    if hz in _LUMA_SPI_BUS_SPEEDS_HZ:
+        return hz
+    nearest = min(_LUMA_SPI_BUS_SPEEDS_HZ, key=lambda a: abs(a - hz))
+    log.warning(
+        "DISPLAY_SPI_SPEED_HZ=%s не из допустимого ряда luma (0.5–52 МГц дискретно); используется %s Гц",
+        hz,
+        nearest,
+    )
+    return nearest
+
+
+SPI_BUS_SPEED_HZ = _spi_bus_speed_hz_from_env(SPI_SPEED_HZ)
+
 
 def _load_device(rotate: Optional[int] = None):
     from luma.core.interface.serial import spi
@@ -56,8 +79,8 @@ def _load_device(rotate: Optional[int] = None):
         "gpio_DC": GPIO_DC,
         "gpio_RST": GPIO_RST,
     }
-    if SPI_SPEED_HZ:
-        spi_kw["bus_speed_hz"] = int(SPI_SPEED_HZ)
+    if SPI_BUS_SPEED_HZ is not None:
+        spi_kw["bus_speed_hz"] = SPI_BUS_SPEED_HZ
 
     serial = spi(**spi_kw)
 
@@ -125,7 +148,7 @@ def main():
                 SPI_DEVICE,
                 GPIO_DC,
                 GPIO_RST,
-                SPI_SPEED_HZ or "default",
+                SPI_BUS_SPEED_HZ if SPI_BUS_SPEED_HZ is not None else "default",
                 GPIO_LIGHT or "18 (luma default)",
             )
         except Exception as e:

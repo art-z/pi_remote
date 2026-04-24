@@ -79,7 +79,37 @@ cd pi_remote
 ```bash
 docker compose up -d --build
 ```
-  
+
+### Ручная проверка дисплея
+
+Нужны запущенные контейнеры **`display`**, **`redis`** и **`api`** (через **nginx** на порту 80). Чтобы вывести **любой текст**, запишите его в состояние дисплея: поле **`text`**, режим **`status`**. Перенос строки в JSON — `\n`. Ключ в Redis по умолчанию **`display:state`**, канал оповещения агента — **`display:notify`** (если переименованы — смотрите `DISPLAY_STATE_KEY` и `DISPLAY_NOTIFY_CHANNEL` в `.env`).
+
+**Через API** (с малины `127.0.0.1`, с другой машины — `http://<IP_малины>/`):
+
+```bash
+curl -sS -X POST "http://127.0.0.1/api/display" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"status","text":"Проверка ST7789\npi_remote OK"}'
+```
+
+**Напрямую в Redis** (из каталога репозитория, где лежит `docker-compose.yml`):
+
+```bash
+docker compose exec redis redis-cli SET display:state \
+  '{"mode":"status","text":"Тест дисплея через Redis"}'
+docker compose exec redis redis-cli PUBLISH display:notify 1
+```
+
+Публикация в `display:notify` заставляет агент сразу перечитать ключ; без неё обновление подтянется по циклу опроса (порядка долей секунды).
+
+**Логи сервиса `display`** (старт, параметры ST7789, ошибки SPI/отрисовки):
+
+```bash
+docker compose logs -f display
+```
+
+Для последних строк без «хвоста»: `docker compose logs --tail=100 display`.
+
 ### Работа: веб и API
 
 - В браузере: `http://<IP_малины>/` — метрики и форма управления дисплеем.
