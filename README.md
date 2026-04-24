@@ -14,6 +14,7 @@ Raspberry Pi 4 Model B Rev 1.4 Debian GNU/Linux 13 (Trixie).
 
 ### Требования и железо
 
+- **Git** (клонирование репозитория на Pi).
 - **Docker** и **Docker Compose v2**.
 - Сборка образов **на самой Pi** (aarch64) или `docker buildx build --platform linux/arm64`.
 - Для `**display`**: доступ к `**/dev/spidev0.0`**, `**/dev/gpiomem**` Распиновка ST7789, подсветка и замечания по GPIO: `**services/display/README.md**`.
@@ -62,11 +63,22 @@ sudo usermod -aG docker "$USER"
 
 ### Поднятие стека
 
-1. Конфиг: `cp .env.example .env`, при необходимости заполните `REMOTE_SYNC_URL`, токены, пороги вентилятора и параметры дисплея.
-2. Весь стек сразу (веб, API, Redis, sync-worker, **дисплей**, **вентилятор**):
-  ```bash
-   docker compose up -d --build
-  ```
+1. **Git и клонирование** — установите клиент и склонируйте репозиторий (пример URL замените на свой форк или зеркало):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git
+cd ~
+git clone https://github.com/art-z/pi_remote.git
+cd pi_remote
+```
+
+2. Конфиг: `cp .env.example .env`, при необходимости заполните `REMOTE_SYNC_URL`, токены, пороги вентилятора и параметры дисплея.
+3. Весь стек сразу (веб, API, Redis, sync-worker, **дисплей**, **вентилятор**):
+
+```bash
+docker compose up -d --build
+```
   
 ### Работа: веб и API
 
