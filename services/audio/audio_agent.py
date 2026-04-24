@@ -188,6 +188,13 @@ def main() -> None:
                         except Exception:
                             err = ""
                     log.warning("arecord завершился (код %s)%s", proc.wait(), f": {err}" if err else "")
+                    if err and ("No such file" in err or "audio open error" in err):
+                        log.error(
+                            "ALSA не открылась (%s). Проверьте: ls -l /dev/snd на хосте и в контейнере; "
+                            "arecord -l; задайте AUDIO_ALSA_DEVICE=plughw:C,D. См. services/audio/README.md — "
+                            "раздел «audio open error: No such file or directory».",
+                            AUDIO_ALSA_DEVICE,
+                        )
                     break
 
                 vol = _rms_volume_hint(chunk)

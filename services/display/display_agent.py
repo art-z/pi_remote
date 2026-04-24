@@ -82,7 +82,18 @@ def _load_device(rotate: Optional[int] = None):
     if SPI_BUS_SPEED_HZ is not None:
         spi_kw["bus_speed_hz"] = SPI_BUS_SPEED_HZ
 
-    serial = spi(**spi_kw)
+    try:
+        serial = spi(**spi_kw)
+    except Exception as e:
+        en = type(e).__name__
+        if en == "DeviceNotFoundError" or "SPI device not found" in str(e):
+            log.error(
+                "SPI недоступен: нужен /dev/spidev%s.%s на хосте (включите SPI, перезагрузка). "
+                "Подробности: services/display/README.md — раздел «SPI device not found».",
+                SPI_PORT,
+                SPI_DEVICE,
+            )
+        raise
 
     dev_kw: dict = {
         "serial_interface": serial,

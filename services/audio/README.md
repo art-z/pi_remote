@@ -152,6 +152,43 @@ docker compose logs -f audio
 
 Сообщения о завершении `arecord` или ALSA чаще всего означают неверный `-D` или отсутствие микрофона.
 
+### `audio open error: No such file or directory`
+
+Чаще всего одно из двух:
+
+1. **В контейнере нет ALSA-узлов** — на **хосте** проверьте:
+
+   ```bash
+   ls -la /dev/snd
+   ```
+
+   Если каталога **нет** или он пустой: нет драйвера звуковой карты / USB-микрофона не виден, или запуск не на той машине. Нужно завести устройство на хосте, затем перезапустить контейнер.
+
+   В контейнере:
+
+   ```bash
+   docker compose exec audio ls -la /dev/snd
+   ```
+
+   Должны быть симлинки вроде `controlC0`, `pcmC0D0c`. Если **No such file** — в `docker-compose.yml` у сервиса `audio` должно быть **`devices: - /dev/snd:/dev/snd`**, образ пересобран не обязателен, достаточно `docker compose up -d audio`.
+
+2. **`AUDIO_ALSA_DEVICE=default` не открывается** в минимальном образе (нет нужного `default` в конфиге ALSA). Задайте явное устройство по **`arecord -l`** на хосте и в контейнере:
+
+   ```bash
+   arecord -l
+   docker compose exec audio arecord -l
+   ```
+
+   В `.env`, например: `AUDIO_ALSA_DEVICE=plughw:1,0` (подставьте свои **card** и **device**). Перезапуск: `docker compose up -d audio`.
+
+Краткая проверка записи **внутри** контейнера (замените `-D` на своё):
+
+```bash
+docker compose exec audio arecord -D plughw:1,0 -f S16_LE -c 1 -r 16000 -d 2 -t raw -q /dev/null
+```
+
+При успехе команда завершится без ошибки ALSA в stderr.
+
 ### `libvosk.so` / `libatomic.so.1: No such file or directory`
 
 В образе `audio` должен быть пакет `**libatomic1**` (зависимость нативной библиотеки из wheel Vosk). Если собирали старый Dockerfile без него — пересоберите образ: `docker compose build --no-cache audio`.
